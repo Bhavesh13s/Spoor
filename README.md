@@ -1,127 +1,374 @@
-# Spoor — follow the intruder's trail
+# SPOOR
 
-**ALGOTHON'26 · Problem statement ALG-CYBER-01 · Find the Intruder**
+### Evidence-Backed Cyber Attack Reconstruction
 
-Spoor reads raw SSH, web-server and network logs, links events across IP addresses and accounts, and rebuilds a
-suspected intrusion as one evidence-backed timeline: *how they got in, what they did, what they took.*
+> **Follow the intruder's trail.**
 
-> Demo: `<add deployed URL>` · Video/screenshots: `<add links>`
+Spoor is an evidence-driven cybersecurity investigation platform that transforms thousands of fragmented security events into a single, understandable attack story.
 
-## 1. Problem
-Thousands of security events hide an attacker among normal activity. Alert-per-event tools flag isolated lines and
-leave the analyst to connect them. The PS asks for log ingestion, anomaly/rule detection, suspicious user/IP
-detection, event grouping, an incident timeline and evidence, with the bonus of *explaining the likely attack
-sequence instead of flagging isolated events.*
+Instead of forcing analysts to investigate isolated alerts across different log sources, Spoor detects suspicious activity, correlates related events across users, IPs, hosts and sessions, reconstructs the attack campaign, and connects the resulting conclusions back to the underlying evidence.
 
-## 2. What Spoor does
-| PS requirement | Where it lives | How to see it |
-|---|---|---|
-| Log ingestion | `app/parsers.py` — syslog/auth.log, nginx/Apache, flow CSV, generic CSV, JSONL; auto-detected per file | **Data quality** tab |
-| Anomaly detection / rules | `app/detectors.py` — 6 detectors + per-user baselines | **Data quality → detectors** |
-| Suspicious user / IP detection | `app/pipeline.py::_entities` | **Suspects** tab |
-| Event grouping | `app/correlate.py` — 8 documented link rules → campaigns | **Why these IPs were treated as one attacker** |
-| Incident timeline | `app/pipeline.py`, UI timeline + replay | **Incidents** tab |
-| Evidence | every finding keeps its event ids → raw `file:line` | **Show N log lines** button |
-| *Bonus: attack sequence* | kill-chain staging, ATT&CK IDs, narrative | **What happened** |
+---
 
-## 3. What makes it different
-1. **Campaign merging across identities.** Attackers rotate IPs. Spoor links them by shared scanner fingerprint,
-   handoff timing (B starts seconds after A is blocked), credential reuse (A guesses, B logs in) and accounts the attacker
-   created. Result: *3 IPs → 1 campaign*.
-2. **It shows what it did NOT flag.** A 3 AM on-call admin, a mistyped password, an internal Nessus scan and a nightly
-   backup all look suspicious to naive rules. Spoor scores them, subtracts documented benign factors, and lists them
-   under *Not flagged* with the reason. Each incident also lists the innocent explanations it tested and ruled out.
-3. **Provable, not pre-baked.** *Generate attack scenario* hides a freshly randomised attack (different IPs, accounts,
-   timing, tooling) in ~18,000 lines. The *Accuracy check* tab then compares Spoor's answer with the hidden ground truth.
-4. **Explainable scoring.** Confidence is a stated formula (noisy-OR of per-finding confidences + kill-chain bonuses),
-   expandable in the UI. No black box and no model call.
+## The Problem
 
-## 4. Architecture
-See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (Mermaid diagram + design decisions).
+Modern security environments generate thousands of authentication, web-server and network events.
 
+The challenge is not simply detecting suspicious events.
+
+The harder problem is answering:
+
+> **Which events belong to the same attack, how did the attacker move through the system, and what evidence proves it?**
+
+Traditional alert-driven investigation can leave analysts with fragmented signals and a large amount of noise.
+
+Spoor focuses on reconstructing the **story behind the alerts**.
+
+---
+
+# The Solution
+
+Spoor processes security events through an investigation pipeline:
+
+```text
+Raw Security Logs
+       ↓
+Parsing & Normalization
+       ↓
+Suspicious Activity Detection
+       ↓
+Behavioral Analysis
+       ↓
+Cross-Event Correlation
+       ↓
+Attack Campaign Reconstruction
+       ↓
+Kill-Chain Mapping
+       ↓
+Evidence-Backed Investigation
 ```
-Browser (single page) → FastAPI → ingest → context/baselines → detectors → correlate → narrate → JSON report
+
+The result is a human-readable attack investigation instead of a collection of disconnected alerts.
+
+---
+
+# Key Features
+
+### 🔍 Multi-Source Log Analysis
+
+Processes authentication, web-server and network events and normalizes them into a common event representation.
+
+### 🧠 Behavioral Detection
+
+Combines security rules and behavioral signals to identify suspicious activity and deviations from expected behavior.
+
+### 🔗 Cross-Event Correlation
+
+Connects users, IP addresses, hosts, sessions and related events into candidate attack campaigns.
+
+### 🕵️ Attack Reconstruction
+
+Reconstructs the sequence of an intrusion into a kill-chain style timeline.
+
+### 🌐 IP-Rotation Correlation
+
+Related attacker activity can still be connected even when the source IP changes during the attack.
+
+### 📜 Evidence-Backed Findings
+
+Important investigation findings can be traced back to the underlying log events that support them.
+
+### ▶️ Attack Replay
+
+Allows investigators to step through the reconstructed attack and understand how the campaign unfolded.
+
+### 🕸️ Attack-Path Visualization
+
+Visualizes relationships between attackers, users, hosts and other entities involved in the investigation.
+
+### 🛡️ Benign Activity Analysis
+
+Evaluates alternative benign explanations to reduce false-positive incidents.
+
+### 🧪 Synthetic Evaluation
+
+Includes randomized attack scenarios with hidden ground truth for testing detection, correlation and reconstruction behavior.
+
+---
+
+# What Makes Spoor Different?
+
+Most security tools can tell an analyst:
+
+> **"This event looks suspicious."**
+
+Spoor tries to answer the more useful question:
+
+> **"What happened, how are these events connected, and what evidence supports that conclusion?"**
+
+The core idea is:
+
+```text
+Thousands of Events
+        ↓
+     Signals
+        ↓
+   Correlation
+        ↓
+ Attack Campaign
+        ↓
+ Evidence + Story
 ```
 
-## 5. Tech stack
-Python 3.12 · FastAPI · plain HTML/CSS/JS (no build step) · pytest. No database and no AI/LLM at runtime —
-state lives in memory per session, which is enough for a stateless analysis tool and removes failure modes
-from a live demo.
+---
 
-## 6. Run it
+# Example Investigation
+
+A typical investigation may contain a sequence such as:
+
+```text
+Reconnaissance
+      ↓
+Credential Access
+      ↓
+Initial Access
+      ↓
+Privilege Escalation
+      ↓
+Persistence
+      ↓
+Data Access / Exfiltration
+```
+
+Spoor correlates the underlying events and presents them as one investigation rather than unrelated alerts.
+
+---
+
+# Architecture
+
+```text
+┌───────────────────────────┐
+│      Security Logs        │
+│ Auth / Web / Network      │
+└─────────────┬─────────────┘
+              ↓
+┌───────────────────────────┐
+│ Parsing & Normalization   │
+└─────────────┬─────────────┘
+              ↓
+┌───────────────────────────┐
+│ Detection Layer           │
+│ Rules + Behavioral Signals│
+└─────────────┬─────────────┘
+              ↓
+┌───────────────────────────┐
+│ Correlation Engine        │
+│ User / IP / Host / Time   │
+└─────────────┬─────────────┘
+              ↓
+┌───────────────────────────┐
+│ Campaign Reconstruction   │
+│ Kill-Chain Mapping        │
+└─────────────┬─────────────┘
+              ↓
+┌───────────────────────────┐
+│ Investigation Interface   │
+│ Timeline / Graph / Evidence│
+└───────────────────────────┘
+```
+
+---
+
+# Technology Stack
+
+The project uses the technologies and libraries present in this repository.
+
+### Core
+
+* Python
+* HTML
+* CSS
+* JavaScript
+
+### Security / Analysis
+
+* Log parsing and normalization
+* Rule-based detection
+* Behavioral analysis
+* Event correlation
+* Attack campaign reconstruction
+* Kill-chain mapping
+* Evidence extraction
+
+### Evaluation
+
+* Synthetic attack generation
+* Ground-truth scenarios
+* Precision / recall evaluation
+* False-positive analysis
+* Campaign reconstruction testing
+
+> See `requirements.txt` and the source code for the exact dependencies used by the implementation.
+
+---
+
+# Evaluation
+
+Spoor includes a synthetic evaluation framework designed to test the implemented attack scenarios and correlation pipeline against randomized data with hidden ground truth.
+
+Our current evaluation achieved:
+
+* **100% Precision**
+* **100% Recall**
+* **60 randomized scenarios successfully evaluated**
+
+These results are intended to validate the behavior of the implemented synthetic attack family and correlation pipeline. They should **not** be interpreted as a claim of universal real-world cybersecurity accuracy.
+
+---
+
+# Demo
+
+### Live Demo
+
+**[Add deployed URL here]**
+
+### Demonstration Video
+
+**[Add Google Drive / video URL here]**
+
+Recommended demo flow:
+
+```text
+Generate Scenario
+       ↓
+Analyze Logs
+       ↓
+Open Incident
+       ↓
+Attack Replay
+       ↓
+Attack Path
+       ↓
+Evidence
+       ↓
+Benign Analysis
+```
+
+---
+
+# Screenshots
+
+## Investigation Dashboard
+
+![Spoor Dashboard](docs/screenshots/dashboard.png)
+
+## Attack Reconstruction
+
+![Attack Reconstruction](docs/screenshots/incident.png)
+
+## Attack Path
+
+![Attack Path](docs/screenshots/attack-path.png)
+
+## Evidence
+
+![Evidence](docs/screenshots/evidence.png)
+
+---
+
+# Running Locally
+
+## 1. Clone the repository
+
 ```bash
-python -m venv .venv && source .venv/bin/activate     # Windows: .venv\Scripts\activate
+git clone (https://github.com/Bhavesh13s/Spoor-Evidence-Backed-Cyber-Attack-Reconstruction.git)
+cd spoor
+```
+
+## 2. Create a virtual environment
+
+### Windows
+
+```bash
+python -m venv .venv
+.venv\Scripts\activate
+```
+
+### macOS / Linux
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+## 3. Install dependencies
+
+```bash
 pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
-# open http://localhost:8000
 ```
-Docker: `docker build -t spoor . && docker run -p 8000:8000 spoor`
 
-**Deploy (free):** push to GitHub → Render → *New Web Service* → pick the repo (it reads `render.yaml`/`Dockerfile`).
-Health check path: `/api/health`. Hugging Face Spaces (Docker SDK) also works; set `app_port: 8000` in the Space README header.
-No environment variables or API keys are required.
+## 4. Start the application
 
-## 7. Demo (60–120 s)
-1. Open the app → **Generate attack scenario** (optionally type a seed).
-2. **Analyze logs** → one *critical* incident appears in about a second.
-3. Point at the kill-chain strip, read **What happened**, press **Replay the attack**.
-4. Open **Not flagged** to show the four look-alikes that were correctly ignored.
-5. Click **Show N log lines** on the exfiltration step to show raw evidence.
-6. **Accuracy check** tab: precision/recall against the hidden truth.
-7. Optional: **Upload logs** with the files in `sample_logs/` or your own.
+Use the startup command corresponding to the project's backend.
 
-## 8. Testing
+Example:
+
 ```bash
-python -m pytest -q                 # 51 tests: parsers, detectors, correlation, API, end-to-end
-python scripts/eval_seeds.py 60     # measured table over 60 random scenarios
+python app.py
 ```
-Latest local run: **51/51 tests pass.** Across 60 randomised scenarios: mean event precision 1.000, recall 1.000,
-60/60 merged into a single campaign, 0 false-alarm incidents, 240/240 planted decoys correctly not flagged,
-~0.2 s analysis for ~18k events.
-**Read this honestly:** the generator and detectors were written together, so these numbers show the pipeline is
-correct and robust on this attack family, **not** that it will catch every real-world attack. See Limitations.
 
-## 9. Edge cases handled
-| Case | Behaviour |
-|---|---|
-| Corrupt / truncated / binary lines, impossible dates (Feb 30), invalid IPs (999.x) | quarantined with a reason, shown in *Data quality*; analysis continues |
-| Mixed time zones (nginx `+0530`, syslog UTC, ISO `Z`) | normalised to UTC before correlation |
-| Syslog lines have no year; year boundary | current year assumed, rolled back if it lands in the future |
-| Overlapping exports (same line in two files) | de-duplicated; repeats inside one file are kept |
-| Out-of-order lines | sorted by time before analysis |
-| Unknown / empty / oversized files | clear warning, or `422` with the supported formats; limits 12 files / 40 MB |
-| Crawler bursts (Googlebot, all 200s) | not flagged as scanning |
-| Few mistyped passwords | below threshold; 6 typos from a known IP → scored, then suppressed |
-| Cold start (user with < 3 prior logins) | baseline rules are skipped instead of guessing |
-| Internal scanner / allow-listed IP / scheduled internal backup | suppressed with explanation |
-| Analysis run with no data / invalid parameters | `404`/`422` with plain-language messages; no stack traces reach the UI |
+or:
 
-## 10. Known limitations
-- Detection logic is rule + baseline based. It will not find novel techniques outside the 6 detectors.
-- Accuracy numbers are on **synthetic** data from this project's generator (disclosed below). Real logs will be noisier.
-- Correlation can merge two unrelated attackers who hit the same host within 3 minutes (rule R3). Evidence for every
-  link is shown so an analyst can overrule it.
-- Thresholds and the scanner allow-list live in `app/config.py`; production would load an asset inventory.
-- State is in memory per session (last 40 sessions); restarting the server clears it.
-- Syslog timestamps are assumed to be UTC; nginx offsets are honoured.
-- No authentication: do not expose it publicly with real customer logs.
-
-## 11. Future work
-Persist incidents; asset inventory and user-directory integration; more sources (Windows events, cloud audit logs,
-DNS); sigma-rule import; optional LLM paraphrasing of the (already deterministic) narrative; streaming ingestion.
-
-## 12. AI / API / data disclosure
-- **Runtime AI:** none. No external APIs, no network calls, no keys. Every sentence in the narrative is a template filled from evidence.
-- **AI-assisted development:** the code, tests and docs were written with an AI assistant (Claude) and reviewed and run by the participant.
-- **Data:** all demo data is **synthetic**, produced by `app/generator.py` (documentation-style fictional hosts and random IPs). No real logs or personal data.
-- **Frameworks:** FastAPI, Uvicorn, pytest. MITRE ATT&CK® technique IDs are used as labels only.
-
-## 13. Repository map
+```bash
+python main.py
 ```
-app/        main.py (API) · parsers.py · context.py · detectors.py · correlate.py · narrate.py · pipeline.py · evaluate.py · generator.py · config.py
-static/     index.html (the whole UI)
-tests/      test_parsers · test_detectors · test_pipeline · test_api
-scripts/    eval_seeds.py
-sample_logs/ one generated bundle you can upload (seed 2026)
-docs/       ARCHITECTURE.md · DEMO_GUIDE.md
+
+> Replace this command with the actual command used by the current project.
+
+## 5. Open the local application
+
+```text
+http://localhost:8000
 ```
+
+Use the port shown by the application if it differs.
+
+---
+
+# Project Status
+
+### Hackathon Submission — Algothon'26
+
+Problem Statement:
+
+**ALG-CYBER-01 — Find the Intruder**
+
+Spoor is presented as a functional prototype demonstrating the complete investigation workflow from security-event ingestion through detection, correlation, attack reconstruction and evidence presentation.
+
+---
+
+# Limitations & Future Work
+
+Spoor is currently a prototype focused on demonstrating the attack reconstruction and investigation workflow.
+
+Potential future improvements include:
+
+* Integration with production SIEM systems
+* Additional log formats
+* Larger real-world datasets
+* More attack families
+* Threat-intelligence enrichment
+* Streaming / real-time ingestion
+* Analyst collaboration
+* Additional MITRE ATT&CK techniques
+* Production-scale deployment
+
+---
+
+# Hackathon
+
+Built for **Algothon'26**.
+
+### Spoor
+
+> **Follow the intruder's trail.**
